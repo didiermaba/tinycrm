@@ -2,10 +2,12 @@
 
 namespace App\Controller;
 
+use App\Entity\Transaction;
 use App\Form\PaymentType;
 use App\Repository\ClientRepository;
 use App\Repository\OffreRepository;
 use App\Repository\TransactionRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use App\Service\StripeService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -24,7 +26,8 @@ class PaymentController extends AbstractController
         OffreRepository $offres,
         ClientRepository $clients,
         MailerInterface $mailer,
-        TransactionRepository $transactions
+        EntityManagerInterface $em,
+        TransactionRepository $transaction,
         ): Response
     {
 
@@ -41,17 +44,13 @@ class PaymentController extends AbstractController
                  $offre->getTitre(),
                  $clientEmail
              );
-        }
 
-        return $this->render('payment/index.html.twig', [
-            'form' => $form->createView(),
-        ]);
         // Envoie du lien au client
         $email = (new Email())
              ->from('hello@tinycrm.app')
-             ->to('$clientEmail')
+             ->to($clientEmail)
              ->priority(Email::PRIORITY_HIGH)
-             ->subject('Merci de provéder au paiement de votre offre')
+             ->subject('Merci de procéder au paiement de votre offre')
              ->html('<div style="background-colr: #f4f4f4; padding: 20px; text-align: center;">
              <h1>Bonjour</h1><br><br>
              <p>Voici le lien pour effectuer le reglement de votre offre:</p><br>
@@ -62,10 +61,21 @@ class PaymentController extends AbstractController
 
     $mailer->send($email);
 
-        // return $this->render('payment/index.html.twig', [
-        //     'controller_name' => 'PaymentController',
-        // ]);
+    $transaction = new Transaction();
+    $transaction->setClient($data['client'])
+                ->setMontant($offre->getMontant())
+                ->setStatut('En attente')
+                ;
+    $em->persist($transaction); // EntityManagerInterface
+    $em->flush();            
+
     }
+
+    return $this->render('payment/index.html.twig', [
+        'form' => $form->createView(),
+    ]);
+
+}
 
     #[Route('/success', name: 'payment_success')]
     public function success(): Response
